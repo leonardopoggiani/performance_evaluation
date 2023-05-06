@@ -4,9 +4,9 @@ go 1.20
 
 require (
 	github.com/leonardopoggiani/live-migration-operator v0.0.0-20230506153944-f4a3ecdb1b52
-	k8s.io/api v0.27.1
+	k8s.io/api v0.26.3
 	k8s.io/apimachinery v0.27.1
-	k8s.io/client-go v0.27.1
+	k8s.io/client-go v0.26.3
 )
 
 require (
