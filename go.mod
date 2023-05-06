@@ -1,6 +1,6 @@
 module github.com/leonardopoggiani/Pod-migration/performance-evaluation
 
-go 1.20
+go 1.19
 
 require (
 	github.com/leonardopoggiani/live-migration-operator v0.0.0-20230506153944-f4a3ecdb1b52
