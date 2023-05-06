@@ -1,4 +1,4 @@
-package performance_evaluation
+package main
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/leonardopoggiani/live-migration-operator/controllers"
+	migrationoperator "github.com/leonardopoggiani/live-migration-operator/controllers"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,9 +66,9 @@ func getCheckpointSize(clientset *kubernetes.Clientset, numContainers int) {
 
 	fmt.Printf("Pod %s is ready\n", pod.Name)
 
-	LiveMigrationReconciler := controllers.LiveMigrationReconciler{}
+	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 	// Create a slice of Container structs
-	var containers []controllers.Container
+	var containers []migrationoperator.Container
 
 	// Append the container ID and name for each container in each pod
 	pods, err := clientset.CoreV1().Pods("default").List(context.Background(), metav1.ListOptions{})
@@ -81,7 +81,7 @@ func getCheckpointSize(clientset *kubernetes.Clientset, numContainers int) {
 			}
 			containerID := idParts[1]
 
-			container := controllers.Container{
+			container := migrationoperator.Container{
 				ID:   containerID,
 				Name: containerStatus.Name,
 			}
@@ -89,7 +89,7 @@ func getCheckpointSize(clientset *kubernetes.Clientset, numContainers int) {
 		}
 	}
 
-	err = LiveMigrationReconciler.checkpointPodCrio(containers, "default", pod.Name)
+	err = LiveMigrationReconciler.CheckpointPodCrio(containers, "default", pod.Name)
 
 	directory := "/tmp/checkpoints/checkpoints"
 	var size int64 = 0
@@ -113,7 +113,7 @@ func getCheckpointSize(clientset *kubernetes.Clientset, numContainers int) {
 		return
 	}
 
-	err = LiveMigrationReconciler.checkpointPodPipelined(containers, "default", pod.Name)
+	err = LiveMigrationReconciler.CheckpointPodPipelined(containers, "default", pod.Name)
 	err = filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -178,8 +178,8 @@ func getTotalTime(clientset *kubernetes.Clientset, numContainers int) (time.Dura
 
 	fmt.Printf("Pod %s is ready\n", pod.Name)
 
-	LiveMigrationReconciler := controllers.LiveMigrationReconciler{}
-	var containers []controllers.Container
+	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
+	var containers []migrationoperator.Container
 
 	// Append the container ID and name for each container in each pod
 	pods, err := clientset.CoreV1().Pods("default").List(context.Background(), metav1.ListOptions{})
@@ -192,7 +192,7 @@ func getTotalTime(clientset *kubernetes.Clientset, numContainers int) (time.Dura
 			}
 			containerID := idParts[1]
 
-			container := controllers.Container{
+			container := migrationoperator.Container{
 				ID:   containerID,
 				Name: containerStatus.Name,
 			}
@@ -203,8 +203,14 @@ func getTotalTime(clientset *kubernetes.Clientset, numContainers int) (time.Dura
 	// Get the start time of the checkpoint
 	start := time.Now()
 
-	LiveMigrationReconciler.checkpointPodPipelined(containers, "default", pod.Name)
-	LiveMigrationReconciler.buildahRestorePipelined(containers, "default", pod.Name)
+	err = LiveMigrationReconciler.CheckpointPodPipelined(containers, "default", pod.Name)
+	if err != nil {
+		return 0, err
+	}
+	_, err = LiveMigrationReconciler.BuildahRestorePipelined(context.TODO(), pod.Name)
+	if err != nil {
+		return 0, err
+	}
 
 	// Calculate the time taken for the checkpoint
 	elapsed := time.Since(start)
@@ -262,8 +268,8 @@ func getCheckpointTime(clientset *kubernetes.Clientset, numContainers int) (time
 
 	fmt.Printf("Pod %s is ready\n", pod.Name)
 
-	LiveMigrationReconciler := controllers.LiveMigrationReconciler{}
-	var containers []controllers.Container
+	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
+	var containers []migrationoperator.Container
 
 	// Append the container ID and name for each container in each pod
 	pods, err := clientset.CoreV1().Pods("default").List(context.Background(), metav1.ListOptions{})
@@ -276,7 +282,7 @@ func getCheckpointTime(clientset *kubernetes.Clientset, numContainers int) (time
 			}
 			containerID := idParts[1]
 
-			container := controllers.Container{
+			container := migrationoperator.Container{
 				ID:   containerID,
 				Name: containerStatus.Name,
 			}
@@ -287,7 +293,7 @@ func getCheckpointTime(clientset *kubernetes.Clientset, numContainers int) (time
 	// Get the start time of the checkpoint
 	start := time.Now()
 
-	err = LiveMigrationReconciler.checkpointPodCrio(containers, "default", pod.Name)
+	err = LiveMigrationReconciler.CheckpointPodCrio(containers, "default", pod.Name)
 	if err != nil {
 		return 0, err
 	}
@@ -298,7 +304,7 @@ func getCheckpointTime(clientset *kubernetes.Clientset, numContainers int) (time
 
 	start = time.Now()
 
-	err = LiveMigrationReconciler.checkpointPodPipelined(containers, "default", pod.Name)
+	err = LiveMigrationReconciler.CheckpointPodPipelined(containers, "default", pod.Name)
 	if err != nil {
 		return 0, err
 	}
@@ -312,11 +318,11 @@ func getCheckpointTime(clientset *kubernetes.Clientset, numContainers int) (time
 
 func getRestoreTime(ctx context.Context) (time.Duration, error) {
 	// Get the start time of the restore
-	LiveMigrationReconciler := controllers.LiveMigrationReconciler{}
+	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 
 	start := time.Now()
 
-	_, err := LiveMigrationReconciler.buildahRestore(ctx, "")
+	_, err := LiveMigrationReconciler.BuildahRestore(ctx, "")
 	if err != nil {
 		return 0, err
 	}
@@ -326,7 +332,7 @@ func getRestoreTime(ctx context.Context) (time.Duration, error) {
 
 	start = time.Now()
 
-	_, err = LiveMigrationReconciler.buildahRestorePipelined(ctx, "")
+	_, err = LiveMigrationReconciler.BuildahRestorePipelined(ctx, "")
 	if err != nil {
 		return 0, err
 	}
@@ -336,7 +342,7 @@ func getRestoreTime(ctx context.Context) (time.Duration, error) {
 
 	start = time.Now()
 
-	_, err = LiveMigrationReconciler.buildahRestoreParallelized(ctx, "")
+	_, err = LiveMigrationReconciler.BuildahRestoreParallelized(ctx, "")
 	if err != nil {
 		return 0, err
 	}
@@ -443,9 +449,9 @@ func getTimeDirectVsTriangularized(clientset *kubernetes.Clientset, numContainer
 	fmt.Printf("Pod %s is ready\n", pod.Name)
 
 	// triangularized
-	LiveMigrationReconciler := controllers.LiveMigrationReconciler{}
+	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 
-	var containers []controllers.Container
+	var containers []migrationoperator.Container
 
 	// Append the container ID and name for each container in each pod
 	pods, err := clientset.CoreV1().Pods("default").List(context.Background(), metav1.ListOptions{})
@@ -458,7 +464,7 @@ func getTimeDirectVsTriangularized(clientset *kubernetes.Clientset, numContainer
 			}
 			containerID := idParts[1]
 
-			container := controllers.Container{
+			container := migrationoperator.Container{
 				ID:   containerID,
 				Name: containerStatus.Name,
 			}
@@ -466,7 +472,7 @@ func getTimeDirectVsTriangularized(clientset *kubernetes.Clientset, numContainer
 		}
 	}
 
-	err = LiveMigrationReconciler.checkpointPodCrio(containers, "default", pod.Name)
+	err = LiveMigrationReconciler.CheckpointPodCrio(containers, "default", pod.Name)
 	if err != nil {
 		return
 	}
