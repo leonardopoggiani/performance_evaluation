@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/leonardopoggiani/Pod-migration/live-migration-operator/controllers"
+	"github.com/leonardopoggiani/live-migration-operator/controllers"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
