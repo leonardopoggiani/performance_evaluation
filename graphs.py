@@ -6,22 +6,7 @@ import pprint
 import datetime
 
 
-def __main__():
-  print("Graphing data...")
-
-  # Connect to database
-  conn = sqlite3.connect('./db/checkpoint_data.db')
-  c = conn.cursor()
-
-  graph_checkpoint_size(conn, c)
-
-  graph_checkpoint_time(conn, c)
-
-  # Close database connection
-  conn.close()
-
-
-def graph_checkpoint_size(conn, c):
+def graph_checkpoint_size(c):
 
   # Get data from database
   c.execute('SELECT timestamp, containers, size FROM checkpoint_sizes')
@@ -66,8 +51,10 @@ def graph_checkpoint_size(conn, c):
 
   fig.savefig(f"fig/{new_filename}")
 
+  return
 
-def graph_checkpoint_time(conn, c):
+
+def graph_checkpoint_time(c):
    # Get data from database
   c.execute('SELECT timestamp, containers, elapsed FROM checkpoint_times')
   data = c.fetchall()
@@ -110,3 +97,20 @@ def graph_checkpoint_time(conn, c):
   new_filename = os.path.splitext(filename)[0] + "_" + timestamp + os.path.splitext(filename)[1]
 
   fig.savefig(f"fig/{new_filename}")
+
+  return
+
+
+if __name__ == "__main__":
+  print("Graphing data...")
+
+  # Connect to database
+  conn = sqlite3.connect('./db/checkpoint_data.db')
+  c = conn.cursor()
+
+  graph_checkpoint_size(c)
+
+  graph_checkpoint_time(c)
+
+  # Close database connection
+  conn.close()
