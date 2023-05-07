@@ -54,16 +54,16 @@ func createContainers(ctx context.Context, numContainers int, clientset *kuberne
 	return pod
 }
 
-func saveSizeToDB(db *sql.DB, numContainers int64, size float64) error {
+func saveSizeToDB(db *sql.DB, numContainers int64, size float64, checkpoint_type string) error {
 	// Prepare SQL statement
-	stmt, err := db.Prepare("INSERT INTO checkpoint_sizes (containers, size) VALUES (?, ?)")
+	stmt, err := db.Prepare("INSERT INTO checkpoint_sizes (containers, size, checkpoint_type) VALUES (?, ?, ?)")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
 	// Execute statement
-	_, err = stmt.Exec(numContainers, size)
+	_, err = stmt.Exec(numContainers, size, checkpoint_type)
 	if err != nil {
 		return err
 	}
@@ -161,7 +161,7 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 
 	sizeInMB := float64(size) / (1024 * 1024)
 	fmt.Printf("The size of %s is %.2f MB.\n", directory, sizeInMB)
-	err = saveSizeToDB(db, int64(numContainers), sizeInMB)
+	err = saveSizeToDB(db, int64(numContainers), sizeInMB, "sequential")
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -209,7 +209,7 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 
 	sizeInMB = float64(size) / (1024 * 1024)
 	fmt.Printf("The size of %s is %.2f MB.\n", directory, sizeInMB)
-	err = saveSizeToDB(db, int64(numContainers), sizeInMB)
+	err = saveSizeToDB(db, int64(numContainers), sizeInMB, "pipelined")
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -405,12 +405,16 @@ func getCheckpointTime(ctx context.Context, clientset *kubernetes.Clientset, num
 	elapsed = time.Since(start)
 	fmt.Println("Elapsed pipelined: ", elapsed)
 
+	saveTimeToDB(db, int64(numContainers), elapsed, "pipelined")
+
 	// delete checkpoint folder
 	if _, err := exec.Command("sudo", "rm", "-rf", directory+"/*").Output(); err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
 	}
+
+	cleanUp(ctx, clientset, pod)
 
 }
 
@@ -584,14 +588,14 @@ func main() {
 	defer cancel()
 
 	// Connect to database
-	db, err := sql.Open("sqlite3", "./db/checkpoint_sizes.db")
+	db, err := sql.Open("sqlite3", "./db/checkpoint_data.db")
 	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
 
 	// Create table if it doesn't exist
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS checkpoint_sizes (timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, containers INTEGER, size FLOAT)")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS checkpoint_sizes (timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, containers INTEGER, size FLOAT, checkpoint_type STRING)")
 	if err != nil {
 		panic(err)
 	}
@@ -637,13 +641,19 @@ func main() {
 	}
 
 	containerCounts := []int{1, 2}
+	repetitions := 10
 
-	for _, numContainers := range containerCounts {
-		getCheckpointSize(ctx, clientset, numContainers, db)
+	for i := 0; i < repetitions; i++ {
+		fmt.Printf("Repetition %d\n", i)
+
+		for _, numContainers := range containerCounts {
+			fmt.Printf("Size for %d containers\n", numContainers)
+			getCheckpointSize(ctx, clientset, numContainers, db)
+		}
+
+		for _, numContainers := range containerCounts {
+			fmt.Printf("Time for %d containers\n", numContainers)
+			getCheckpointTime(ctx, clientset, numContainers, db)
+		}
 	}
-
-	for _, numContainers := range containerCounts {
-		getCheckpointTime(ctx, clientset, numContainers, db)
-	}
-
 }
