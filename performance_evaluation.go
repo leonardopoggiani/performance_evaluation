@@ -27,7 +27,7 @@ func createContainers(ctx context.Context, numContainers int, clientset *kuberne
 	for i := 0; i < numContainers; i++ {
 		container := v1.Container{
 			Name:            fmt.Sprintf("container-%d", i),
-			Image:           "docker.io/leonardopoggiani/file-handler",
+			Image:           "docker.io/library/nginx:latest",
 			ImagePullPolicy: v1.PullPolicy("IfNotPresent"),
 		}
 
@@ -641,7 +641,9 @@ func main() {
 	}
 
 	containerCounts := []int{1, 2}
-	repetitions := 10
+	// 	containerCounts := []int{1, 2, 3, 5, 10}
+	repetitions := 5
+	//  repetitions := 20
 
 	for i := 0; i < repetitions; i++ {
 		fmt.Printf("Repetition %d\n", i)
