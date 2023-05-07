@@ -22,8 +22,6 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 	createContainers := []v1.Container{}
 	// Add the specified number of containers to the Pod manifest
 	for i := 0; i < numContainers; i++ {
-		fmt.Printf("Adding container %d", i)
-
 		container := v1.Container{
 			Name:  fmt.Sprintf("container-%d", i),
 			Image: "nginx",
@@ -48,14 +46,23 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 		panic(err.Error())
 	}
 
+	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
+
+	err = LiveMigrationReconciler.WaitForContainerReady(fmt.Sprintf("test-pod-%d-containers", numContainers), "default", fmt.Sprintf("container-%d", numContainers), clientset)
+	if err != nil {
+		panic(err.Error())
+	}
+
 	fmt.Printf("Pod %s is ready\n", pod.Name)
 
-	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 	// Create a slice of Container structs
 	var containers []migrationoperator.Container
 
 	// Append the container ID and name for each container in each pod
 	pods, err := clientset.CoreV1().Pods("default").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return
+	}
 
 	for _, pod := range pods.Items {
 		for _, containerStatus := range pod.Status.ContainerStatuses {
@@ -74,6 +81,9 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 	}
 
 	err = LiveMigrationReconciler.CheckpointPodCrio(containers, "default", pod.Name)
+	if err != nil {
+		return
+	}
 
 	directory := "/tmp/checkpoints/checkpoints"
 	var size int64 = 0
@@ -98,6 +108,10 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 	}
 
 	err = LiveMigrationReconciler.CheckpointPodPipelined(containers, "default", pod.Name)
+	if err != nil {
+		return
+	}
+
 	err = filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -112,6 +126,12 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 		return
 	}
 	fmt.Printf("The size of %s is %d bytes.\n", directory, size)
+
+	// clean up pods
+	err = clientset.CoreV1().Pods("default").Delete(ctx, pod.Name, metav1.DeleteOptions{})
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
 func getTotalTime(clientset *kubernetes.Clientset, numContainers int) (time.Duration, error) {
