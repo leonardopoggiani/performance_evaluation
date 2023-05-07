@@ -617,7 +617,7 @@ func main() {
 		return
 	}
 
-	containerCounts := []int{1, 2, 3, 5, 10}
+	containerCounts := []int{1, 2}
 
 	// Loop over the container counts
 	for _, numContainers := range containerCounts {

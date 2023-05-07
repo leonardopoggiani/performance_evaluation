@@ -1,6 +1,7 @@
 import sqlite3
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import os
 
 # Connect to database
 conn = sqlite3.connect('./db/checkpoint_sizes.db')
