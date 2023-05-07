@@ -54,21 +54,19 @@ func createContainers(ctx context.Context, numContainers int, clientset *kuberne
 	return pod
 }
 
-func saveSizeToDB(db *sql.DB, numContainers int64, size float64, checkpoint_type string) error {
+func saveSizeToDB(db *sql.DB, numContainers int64, size float64, checkpoint_type string) {
 	// Prepare SQL statement
 	stmt, err := db.Prepare("INSERT INTO checkpoint_sizes (containers, size, checkpoint_type) VALUES (?, ?, ?)")
 	if err != nil {
-		return err
+		return
 	}
 	defer stmt.Close()
 
 	// Execute statement
 	_, err = stmt.Exec(numContainers, size, checkpoint_type)
 	if err != nil {
-		return err
+		return
 	}
-
-	return nil
 }
 
 func saveTimeToDB(db *sql.DB, numContainers int64, elapsed time.Duration, checkpoint_type string) {
@@ -84,8 +82,6 @@ func saveTimeToDB(db *sql.DB, numContainers int64, elapsed time.Duration, checkp
 	if err != nil {
 		return
 	}
-
-	return
 }
 
 func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, numContainers int, db *sql.DB) {
@@ -161,11 +157,7 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 
 	sizeInMB := float64(size) / (1024 * 1024)
 	fmt.Printf("The size of %s is %.2f MB.\n", directory, sizeInMB)
-	err = saveSizeToDB(db, int64(numContainers), sizeInMB, "sequential")
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
+	saveSizeToDB(db, int64(numContainers), sizeInMB, "sequential")
 
 	// delete checkpoints folder
 	if _, err := exec.Command("sudo", "rm", "-f", directory+"/*").Output(); err != nil {
@@ -211,11 +203,7 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 
 	sizeInMB = float64(size) / (1024 * 1024)
 	fmt.Printf("The size of %s is %.2f MB.\n", directory, sizeInMB)
-	err = saveSizeToDB(db, int64(numContainers), sizeInMB, "pipelined")
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
+	saveSizeToDB(db, int64(numContainers), sizeInMB, "pipelined")
 
 	// delete checkpoints folder
 	if _, err := exec.Command("sudo", "rm", "-f", directory+"/*").Output(); err != nil {
@@ -644,7 +632,7 @@ func main() {
 		return
 	}
 
-	containerCounts := []int{1, 2}
+	containerCounts := []int{1, 2, 5}
 	// 	containerCounts := []int{1, 2, 3, 5, 10}
 	repetitions := 5
 	//  repetitions := 20
