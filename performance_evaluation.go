@@ -43,14 +43,17 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {
-		panic(err.Error())
+		fmt.Println(err.Error())
+		return
 	}
 
 	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 
 	err = LiveMigrationReconciler.WaitForContainerReady(fmt.Sprintf("test-pod-%d-containers", numContainers), "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
 	if err != nil {
-		panic(err.Error())
+		cleanUp(ctx, clientset, pod)
+		fmt.Println(err.Error())
+		return
 	}
 
 	fmt.Printf("Pod %s is ready\n", pod.Name)
@@ -62,6 +65,7 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 	pods, err := clientset.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		fmt.Println(err.Error())
+		cleanUp(ctx, clientset, pod)
 		return
 	}
 
@@ -85,6 +89,7 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 	err = LiveMigrationReconciler.CheckpointPodCrio(containers, "default", pod.Name)
 	if err != nil {
 		fmt.Println(err.Error())
+		cleanUp(ctx, clientset, pod)
 		return
 	}
 
@@ -93,16 +98,20 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 	err = filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			fmt.Println(err.Error())
+			cleanUp(ctx, clientset, pod)
 			return err
 		}
 		if !info.Mode().IsRegular() {
 			fmt.Println(err.Error())
+			cleanUp(ctx, clientset, pod)
 			return nil
 		}
 		size += info.Size()
+		cleanUp(ctx, clientset, pod)
 		return nil
 	})
 	if err != nil {
+		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
 	}
@@ -110,22 +119,26 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 
 	// delete checkpoints folder
 	if _, err := exec.Command("sudo", "rm", "-rf", directory+"/*").Output(); err != nil {
+		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
 	}
 
 	err = LiveMigrationReconciler.CheckpointPodPipelined(containers, "default", pod.Name)
 	if err != nil {
+		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
 	}
 
 	err = filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			cleanUp(ctx, clientset, pod)
 			fmt.Println(err.Error())
 			return err
 		}
 		if !info.Mode().IsRegular() {
+			cleanUp(ctx, clientset, pod)
 			fmt.Println(err.Error())
 			return nil
 		}
@@ -133,13 +146,18 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 		return nil
 	})
 	if err != nil {
+		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
 	}
 	fmt.Printf("The size of %s is %d bytes.\n", directory, size)
 
 	// clean up pods
-	err = clientset.CoreV1().Pods("default").Delete(ctx, pod.Name, metav1.DeleteOptions{})
+	cleanUp(ctx, clientset, pod)
+}
+
+func cleanUp(ctx context.Context, clientset *kubernetes.Clientset, pod *v1.Pod) {
+	err := clientset.CoreV1().Pods("default").Delete(ctx, pod.Name, metav1.DeleteOptions{})
 	if err != nil {
 		panic(err.Error())
 	}
