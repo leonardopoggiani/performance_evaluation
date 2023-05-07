@@ -33,7 +33,7 @@ for container in container_data:
     y = [row[1] for row in container_data[container]]
 
     # Plot the sizes as a bar chart
-    plt.bar(x, y, color='b', align='center', width=0.2, label=f'{row[1]} container')
+    plt.bar(x, y, color='b', align='center', width=0.2, label=f'{container} container')
   
 plt.xlabel('Number of containers')
 plt.ylabel('Checkpoint size (MB)')
