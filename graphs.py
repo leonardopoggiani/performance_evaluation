@@ -2,35 +2,42 @@ import sqlite3
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-# Connect to the database
+# Connect to database
 conn = sqlite3.connect('./db/checkpoint_sizes.db')
-cursor = conn.cursor()
+c = conn.cursor()
 
-# Query the database for all rows in the checkpoint_sizes table
-cursor.execute("SELECT * FROM checkpoint_sizes")
-rows = cursor.fetchall()
+# Get data from database
+c.execute('SELECT timestamp, containers, size FROM checkpoint_sizes')
+data = c.fetchall()
 
-# Create empty lists to store the timestamps and sizes
-timestamps = []
-sizes = []
+# Create dictionary to store data by numContainers
+container_data = {}
+for container in set([x[1] for x in data]):
+    container_data[container] = []
 
-# Extract the timestamps and sizes from the rows
-for row in rows:
-    timestamps.append(row[0])
-    sizes.append(row[2])
+# Populate dictionary
+for row in data:
+    container_data[row[1]].append((row[0], row[2]))
 
-# Convert the timestamps to Matplotlib date format
-timestamps = [mdates.date2num(t) for t in timestamps]
-
-# Plot the data as a bar graph
+# Create figure
 fig, ax = plt.subplots()
-ax.bar(timestamps, sizes, width=1.0/24)
-ax.xaxis_date()
+
+# Plot data for each numContainers
+for container in container_data:
+    x = [row[0] for row in container_data[container]]
+    y = [row[1] for row in container_data[container]]
+    ax.plot(x, y, label=f"{container} containers")
+
+# Format graph
 ax.set_xlabel('Timestamp')
-ax.set_ylabel('Checkpoint Size (MB)')
-ax.set_title('Checkpoint Sizes Over Time')
-plt.show()
+ax.set_ylabel('Checkpoint size (MB)')
+ax.legend()
+fig.autofmt_xdate()
 
-# Close the database connection
+# Save graph image to "fig" folder
+if not os.path.exists("fig"):
+    os.makedirs("fig")
+fig.savefig("fig/checkpoint_sizes.png")
+
+# Close database connection
 conn.close()
-
