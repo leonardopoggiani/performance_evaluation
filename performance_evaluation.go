@@ -114,7 +114,6 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 			return nil
 		}
 		size += info.Size()
-		cleanUp(ctx, clientset, pod)
 		return nil
 	})
 	if err != nil {
@@ -166,10 +165,23 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 		fmt.Println(err.Error())
 		return
 	}
-	fmt.Printf("The size of %s is %d bytes.\n", directory, size)
 
-	// clean up pods
-	cleanUp(ctx, clientset, pod)
+	sizeInMB = float64(size) / (1024 * 1024)
+	fmt.Printf("The size of %s is %.2f MB.\n", directory, sizeInMB)
+
+	// delete checkpoints folder
+	if _, err := exec.Command("sudo", "rm", "-rf", directory+"/*").Output(); err != nil {
+		cleanUp(ctx, clientset, pod)
+		fmt.Println(err.Error())
+		return
+	}
+
+	// check that checkpoints folder is empty
+	if _, err := exec.Command("sudo", "ls", directory).Output(); err != nil {
+		cleanUp(ctx, clientset, pod)
+		fmt.Println(err.Error())
+		return
+	}
 }
 
 func cleanUp(ctx context.Context, clientset *kubernetes.Clientset, pod *v1.Pod) {
