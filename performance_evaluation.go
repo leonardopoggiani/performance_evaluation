@@ -9,7 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"database/sql"
+
 	migrationoperator "github.com/leonardopoggiani/live-migration-operator/controllers"
+	_ "github.com/mattn/go-sqlite3"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,7 +53,24 @@ func createContainers(ctx context.Context, numContainers int, clientset *kuberne
 	return pod
 }
 
-func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, numContainers int) {
+func saveSizeToDB(db *sql.DB, directory string, size int64) error {
+	// Prepare SQL statement
+	stmt, err := db.Prepare("INSERT INTO checkpoint_sizes (directory, size) VALUES (?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	// Execute statement
+	_, err = stmt.Exec(directory, size)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, numContainers int, db *sql.DB) {
 
 	pod := createContainers(ctx, numContainers, clientset)
 
@@ -110,7 +130,6 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 		}
 		if !info.Mode().IsRegular() {
 			fmt.Println("Not a regular file")
-			cleanUp(ctx, clientset, pod)
 			return nil
 		}
 		size += info.Size()
@@ -124,6 +143,11 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 
 	sizeInMB := float64(size) / (1024 * 1024)
 	fmt.Printf("The size of %s is %.2f MB.\n", directory, sizeInMB)
+	err = saveSizeToDB(db, directory, size)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
 
 	// delete checkpoints folder
 	if _, err := exec.Command("sudo", "rm", "-rf", directory+"/*").Output(); err != nil {
@@ -153,7 +177,6 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 			return err
 		}
 		if !info.Mode().IsRegular() {
-			cleanUp(ctx, clientset, pod)
 			fmt.Println("Not a regular file")
 			return nil
 		}
@@ -182,6 +205,8 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 		fmt.Println(err.Error())
 		return
 	}
+
+	cleanUp(ctx, clientset, pod)
 }
 
 func cleanUp(ctx context.Context, clientset *kubernetes.Clientset, pod *v1.Pod) {
@@ -549,6 +574,19 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Connect to database
+	db, err := sql.Open("sqlite3", "./db/checkpoint_sizes.db")
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	// Create table if it doesn't exist
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS checkpoint_sizes (timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, directory TEXT, size INTEGER)")
+	if err != nil {
+		panic(err)
+	}
+
 	// Load Kubernetes config
 	kubeconfigPath := os.Getenv("KUBECONFIG")
 	if kubeconfigPath == "" {
@@ -577,7 +615,7 @@ func main() {
 
 	// Loop over the container counts
 	for _, numContainers := range containerCounts {
-		getCheckpointSize(ctx, clientset, numContainers)
+		getCheckpointSize(ctx, clientset, numContainers, db)
 	}
 
 }
