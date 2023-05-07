@@ -2,6 +2,7 @@ import sqlite3
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import os
+import pprint
 
 # Connect to database
 conn = sqlite3.connect('./db/checkpoint_sizes.db')
@@ -20,19 +21,23 @@ for container in set([x[1] for x in data]):
 for row in data:
     container_data[row[1]].append((row[0], row[2]))
 
+pprint.pprint(container_data)
+
 # Create figure
-fig, ax = plt.subplots()
+fig = plt.figure()
 
 # Plot data for each numContainers
 for container in container_data:
     x = [row[0] for row in container_data[container]]
     y = [row[1] for row in container_data[container]]
-    ax.plot(x, y, label=f"{container} containers")
 
-# Format graph
-ax.set_xlabel('Timestamp')
-ax.set_ylabel('Checkpoint size (MB)')
-ax.legend()
+    # Plot the sizes as a bar chart
+    plt.bar(x, y, color='b', align='center', width=0.2, label=f'{row[1]} container')
+  
+plt.xlabel('Number of containers')
+plt.ylabel('Checkpoint size (MB)')
+plt.title('Checkpoint sizes by number of containers')
+plt.legend()
 fig.autofmt_xdate()
 
 # Save graph image to "fig" folder
