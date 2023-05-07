@@ -17,8 +17,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, numContainers int) {
-
+func createContainers(ctx context.Context, numContainers int, clientset *kubernetes.Clientset) *v1.Pod {
 	createContainers := []v1.Container{}
 	// Add the specified number of containers to the Pod manifest
 	for i := 0; i < numContainers; i++ {
@@ -44,12 +43,19 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 	}, metav1.CreateOptions{})
 	if err != nil {
 		fmt.Println(err.Error())
-		return
+		return nil
 	}
+
+	return pod
+}
+
+func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, numContainers int) {
+
+	pod := createContainers(ctx, numContainers, clientset)
 
 	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 
-	err = LiveMigrationReconciler.WaitForContainerReady(fmt.Sprintf("test-pod-%d-containers", numContainers), "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
+	err := LiveMigrationReconciler.WaitForContainerReady(fmt.Sprintf("test-pod-%d-containers", numContainers), "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
 	if err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
