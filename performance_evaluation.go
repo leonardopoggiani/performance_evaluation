@@ -48,7 +48,7 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 
 	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 
-	err = LiveMigrationReconciler.WaitForContainerReady(fmt.Sprintf("test-pod-%d-containers", numContainers), "default", fmt.Sprintf("container-%d", numContainers), clientset)
+	err = LiveMigrationReconciler.WaitForContainerReady(fmt.Sprintf("test-pod-%d-containers", numContainers), "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
 	if err != nil {
 		panic(err.Error())
 	}
