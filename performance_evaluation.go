@@ -168,17 +168,19 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 	}
 
 	// delete checkpoints folder
-	if _, err := exec.Command("sudo", "rm", "-rf", directory+"/*").Output(); err != nil {
+	if _, err := exec.Command("sudo", "rm", "-f", directory+"/*").Output(); err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
 	}
 
 	// check that checkpoints folder is empty
-	if _, err := exec.Command("sudo", "ls", directory).Output(); err != nil {
+	if output, err := exec.Command("sudo", "ls", directory).Output(); err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
+	} else {
+		fmt.Printf("Output: %s\n", output)
 	}
 
 	err = LiveMigrationReconciler.CheckpointPodPipelined(containers, "default", pod.Name)
@@ -216,17 +218,19 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 	}
 
 	// delete checkpoints folder
-	if _, err := exec.Command("sudo", "rm", "-rf", directory+"/*").Output(); err != nil {
+	if _, err := exec.Command("sudo", "rm", "-f", directory+"/*").Output(); err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
 	}
 
 	// check that checkpoints folder is empty
-	if _, err := exec.Command("sudo", "ls", directory).Output(); err != nil {
+	if output, err := exec.Command("sudo", "ls", directory).Output(); err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
+	} else {
+		fmt.Printf("Output: %s\n", output)
 	}
 
 	cleanUp(ctx, clientset, pod)
