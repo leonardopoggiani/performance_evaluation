@@ -15,17 +15,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/component-helpers/scheduling/corev1"
 )
 
 func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, numContainers int) {
 
-	createContainers := []*corev1.Container{}
+	createContainers := []v1.Container{}
 	// Add the specified number of containers to the Pod manifest
 	for i := 0; i < numContainers; i++ {
 		fmt.Printf("Adding container %d", i)
 
-		container := &v1.Container{
+		container := v1.Container{
 			Name:  fmt.Sprintf("container-%d", i),
 			Image: "nginx",
 		}
