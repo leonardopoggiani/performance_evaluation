@@ -54,7 +54,7 @@ func createContainers(ctx context.Context, numContainers int, clientset *kuberne
 	return pod
 }
 
-func saveSizeToDB(db *sql.DB, numContainers int64, size int64) error {
+func saveSizeToDB(db *sql.DB, numContainers int64, size float64) error {
 	// Prepare SQL statement
 	stmt, err := db.Prepare("INSERT INTO checkpoint_sizes (containers, size) VALUES (?, ?)")
 	if err != nil {
@@ -144,7 +144,7 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 
 	sizeInMB := float64(size) / (1024 * 1024)
 	fmt.Printf("The size of %s is %.2f MB.\n", directory, sizeInMB)
-	err = saveSizeToDB(db, int64(numContainers), size)
+	err = saveSizeToDB(db, int64(numContainers), sizeInMB)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -583,7 +583,7 @@ func main() {
 	defer db.Close()
 
 	// Create table if it doesn't exist
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS checkpoint_sizes (timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, containers INTEGER, size INTEGER)")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS checkpoint_sizes (timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, containers INTEGER, size FLOAT)")
 	if err != nil {
 		panic(err)
 	}
