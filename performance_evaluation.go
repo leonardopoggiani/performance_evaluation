@@ -15,36 +15,26 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/component-helpers/scheduling/corev1"
 )
 
-func getCheckpointSize(clientset *kubernetes.Clientset, numContainers int) {
+func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, numContainers int) {
 
-	// Define the Pod manifest
-	podManifest := []byte(fmt.Sprintf(
-		`apiVersion: v1
-		kind: Pod
-		metadata:
-		  name: test-pod-%d-containers
-		spec:
-		  containers:`,
-		numContainers))
-
+	createContainers := []*corev1.Container{}
 	// Add the specified number of containers to the Pod manifest
 	for i := 0; i < numContainers; i++ {
-		containerManifest := fmt.Sprintf(
-			`- name: container-%d
-			image: nginx`,
-			i)
-		podManifest = append(podManifest, []byte(containerManifest)...)
+		fmt.Printf("Adding container %d", i)
+
+		container := &v1.Container{
+			Name:  fmt.Sprintf("container-%d", i),
+			Image: "nginx",
+		}
+
+		createContainers = append(createContainers, container)
 	}
 
-	// Finish the Pod manifest
-	podManifest = append(podManifest, []byte(`
-  		restartPolicy: Never
-	`)...)
-
 	// Create the Pod
-	pod, err := clientset.CoreV1().Pods("default").Create(context.TODO(), &v1.Pod{
+	pod, err := clientset.CoreV1().Pods("default").Create(ctx, &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf("test-pod-%d-containers", numContainers),
 			Labels: map[string]string{
@@ -52,12 +42,7 @@ func getCheckpointSize(clientset *kubernetes.Clientset, numContainers int) {
 			},
 		},
 		Spec: v1.PodSpec{
-			Containers: []v1.Container{
-				{
-					Name:  "nginx",
-					Image: "nginx",
-				},
-			},
+			Containers: createContainers,
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {
@@ -273,6 +258,9 @@ func getCheckpointTime(clientset *kubernetes.Clientset, numContainers int) (time
 
 	// Append the container ID and name for each container in each pod
 	pods, err := clientset.CoreV1().Pods("default").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return 0, err
+	}
 
 	for _, pod := range pods.Items {
 		for _, containerStatus := range pod.Status.ContainerStatuses {
@@ -481,6 +469,10 @@ func getTimeDirectVsTriangularized(clientset *kubernetes.Clientset, numContainer
 }
 
 func main() {
+	// Use a context to cancel the loop that checks for sourcePod
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Load Kubernetes config
 	kubeconfigPath := os.Getenv("KUBECONFIG")
 	if kubeconfigPath == "" {
@@ -509,7 +501,7 @@ func main() {
 
 	// Loop over the container counts
 	for _, numContainers := range containerCounts {
-		getCheckpointSize(clientset, numContainers)
+		getCheckpointSize(ctx, clientset, numContainers)
 	}
 
 }
