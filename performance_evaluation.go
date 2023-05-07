@@ -108,7 +108,7 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 			return err
 		}
 		if !info.Mode().IsRegular() {
-			fmt.Println(err.Error())
+			fmt.Println("Not a regular file")
 			cleanUp(ctx, clientset, pod)
 			return nil
 		}
@@ -145,7 +145,7 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 		}
 		if !info.Mode().IsRegular() {
 			cleanUp(ctx, clientset, pod)
-			fmt.Println(err.Error())
+			fmt.Println("Not a regular file")
 			return nil
 		}
 		size += info.Size()
