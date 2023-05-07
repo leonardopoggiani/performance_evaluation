@@ -22,8 +22,9 @@ func createContainers(ctx context.Context, numContainers int, clientset *kuberne
 	// Add the specified number of containers to the Pod manifest
 	for i := 0; i < numContainers; i++ {
 		container := v1.Container{
-			Name:  fmt.Sprintf("container-%d", i),
-			Image: "nginx",
+			Name:            fmt.Sprintf("container-%d", i),
+			Image:           "docker.io/leonardopoggiani/file-handler",
+			ImagePullPolicy: v1.PullPolicy("IfNotPresent"),
 		}
 
 		createContainers = append(createContainers, container)
