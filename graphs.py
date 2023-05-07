@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import os
 import pprint
+import datetime
 
 # Connect to database
 conn = sqlite3.connect('./db/checkpoint_sizes.db')
@@ -43,7 +44,13 @@ fig.autofmt_xdate()
 # Save graph image to "fig" folder
 if not os.path.exists("fig"):
     os.makedirs("fig")
-fig.savefig("fig/checkpoint_sizes.png")
+
+
+filename = "checkpoint_sizes.txt"
+timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+new_filename = os.path.splitext(filename)[0] + "_" + timestamp + os.path.splitext(filename)[1]
+
+fig.savefig(f"fig/{new_filename}")
 
 # Close database connection
 conn.close()
