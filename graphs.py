@@ -7,8 +7,7 @@ import datetime
 
 
 def graph_checkpoint_size(c):
-
-  # Get data from database
+    # Get data from database
   c.execute('SELECT timestamp, containers, size FROM checkpoint_sizes')
   data = c.fetchall()
 
@@ -21,7 +20,15 @@ def graph_checkpoint_size(c):
   for row in data:
       container_data[row[1]].append((row[0], row[2]))
 
+  # Calculate averages
+  averages = {}
+  for container, values in container_data.items():
+      sizes = [v[1] for v in values]
+      avg_size = sum(sizes) / len(sizes)
+      averages[container] = avg_size
+
   pprint.pprint(container_data)
+  pprint.pprint(averages)
 
   # Create figure
   fig = plt.figure()
@@ -33,7 +40,12 @@ def graph_checkpoint_size(c):
 
       # Plot the sizes as a bar chart
       plt.bar(x, y, color='b', align='center', width=0.2, label=f'{container} container')
-    
+
+  # Plot the averages as a line chart
+  x = [int(container) for container in averages.keys()]
+  y = list(averages.values())
+  plt.plot(x, y, color='r', label='Average')
+
   plt.xlabel('Number of containers')
   plt.ylabel('Checkpoint size (MB)')
   plt.title('Checkpoint sizes by number of containers')
@@ -43,7 +55,6 @@ def graph_checkpoint_size(c):
   # Save graph image to "fig" folder
   if not os.path.exists("fig"):
       os.makedirs("fig")
-
 
   filename = "checkpoint_sizes.png"
   timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
