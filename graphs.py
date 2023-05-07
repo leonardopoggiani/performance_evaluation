@@ -46,7 +46,7 @@ if not os.path.exists("fig"):
     os.makedirs("fig")
 
 
-filename = "checkpoint_sizes.txt"
+filename = "checkpoint_sizes.png"
 timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 new_filename = os.path.splitext(filename)[0] + "_" + timestamp + os.path.splitext(filename)[1]
 
