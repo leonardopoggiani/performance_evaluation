@@ -59,8 +59,9 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 	var containers []migrationoperator.Container
 
 	// Append the container ID and name for each container in each pod
-	pods, err := clientset.CoreV1().Pods("default").List(context.Background(), metav1.ListOptions{})
+	pods, err := clientset.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
 	if err != nil {
+		fmt.Println(err.Error())
 		return
 	}
 
@@ -68,6 +69,7 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 		for _, containerStatus := range pod.Status.ContainerStatuses {
 			idParts := strings.Split(containerStatus.ContainerID, "//")
 			if len(idParts) < 2 {
+				fmt.Println("Malformed container ID")
 				return
 			}
 			containerID := idParts[1]
@@ -82,6 +84,7 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 
 	err = LiveMigrationReconciler.CheckpointPodCrio(containers, "default", pod.Name)
 	if err != nil {
+		fmt.Println(err.Error())
 		return
 	}
 
@@ -89,40 +92,48 @@ func getCheckpointSize(ctx context.Context, clientset *kubernetes.Clientset, num
 	var size int64 = 0
 	err = filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			fmt.Println(err.Error())
 			return err
 		}
 		if !info.Mode().IsRegular() {
+			fmt.Println(err.Error())
 			return nil
 		}
 		size += info.Size()
 		return nil
 	})
 	if err != nil {
+		fmt.Println(err.Error())
 		return
 	}
 	fmt.Printf("The size of %s is %d bytes.\n", directory, size)
 
 	// delete checkpoints folder
 	if _, err := exec.Command("sudo", "rm", "-rf", directory+"/*").Output(); err != nil {
+		fmt.Println(err.Error())
 		return
 	}
 
 	err = LiveMigrationReconciler.CheckpointPodPipelined(containers, "default", pod.Name)
 	if err != nil {
+		fmt.Println(err.Error())
 		return
 	}
 
 	err = filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			fmt.Println(err.Error())
 			return err
 		}
 		if !info.Mode().IsRegular() {
+			fmt.Println(err.Error())
 			return nil
 		}
 		size += info.Size()
 		return nil
 	})
 	if err != nil {
+		fmt.Println(err.Error())
 		return
 	}
 	fmt.Printf("The size of %s is %d bytes.\n", directory, size)
