@@ -772,4 +772,17 @@ func main() {
 		}
 	}
 
+	// Command to call the Python program
+	cmd := exec.Command("python", "graphs.py")
+
+	// Run the command and capture the output
+	output, err := cmd.Output()
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	// Print the output of the Python program
+	fmt.Println(string(output))
+
 }
