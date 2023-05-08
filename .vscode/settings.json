@@ -1,0 +1,11 @@
+{
+  "sqltools.useNodeRuntime": true,
+  "sqltools.connections": [
+    {
+      "previewLimit": 50,
+      "driver": "SQLite",
+      "name": "Data",
+      "database": "${workspaceFolder:performance_evaluation}/db/checkpoint_data.db"
+    }
+  ]
+}
