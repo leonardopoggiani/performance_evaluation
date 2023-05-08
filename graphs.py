@@ -4,11 +4,36 @@ import matplotlib.dates as mdates
 import os
 import pprint
 import datetime
+<<<<<<< HEAD
 import numpy as np
 import scipy
 import statistics
 from math import sqrt
+=======
+import scipy
+>>>>>>> fe0ffa8 (fixup! Dividing functions for checking checkpoints)
 
+# function to add value labels
+def addlabels(x,y):
+    for i in range(len(x)):
+        plt.text(i,y[i],y[i])
+
+def confidence_interval(data, confidence=0.95):
+    """
+    Calculate the confidence interval for a given dataset and confidence level.
+    
+    Args:
+    - data: A list or array of numerical data.
+    - confidence: A float representing the desired confidence level. Default is 0.95.
+    
+    Returns:
+    A tuple containing the lower and upper bounds of the confidence interval.
+    """
+    n = len(data)
+    m = np.mean(data)
+    std_err = sem(data)
+    h = std_err * t.ppf((1 + confidence) / 2, n - 1)
+    return m - h, m + h
 
 # function to add value labels
 def addlabels(x,y):
@@ -36,6 +61,7 @@ def graph_checkpoint_size(c):
       avg_size = sum(sizes) / len(sizes)
       averages[container] = avg_size
 
+<<<<<<< HEAD
   averages = {}
 
   for key, value in container_data.items():
@@ -45,6 +71,16 @@ def graph_checkpoint_size(c):
     for item in value:
         size_sum += item[1]
     averages[key] = (size_sum/count)
+=======
+
+  fig = plt.figure()
+  ax = fig.add_axes([0,0,1,1])  
+  ax.bar(averages.keys(), averages.values())
+  ax.set_xlabel('Number of containers')
+  ax.set_ylabel('Average (MB)')
+  ax.set_title('Average of sizes by number of containers')
+  plt.show()
+>>>>>>> fe0ffa8 (fixup! Dividing functions for checking checkpoints)
 
   fig = plt.figure()
 
@@ -73,7 +109,10 @@ def graph_checkpoint_size(c):
   plt.xlabel('Number of containers')
   plt.ylabel('Average checkpoint size (MB)')
   plt.title('Checkpoint sizes by number of containers')
+<<<<<<< HEAD
 
+=======
+>>>>>>> fe0ffa8 (fixup! Dividing functions for checking checkpoints)
   fig.autofmt_xdate()
 
   filename = "checkpoint_sizes_averages.png"
