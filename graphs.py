@@ -4,7 +4,16 @@ import matplotlib.dates as mdates
 import os
 import pprint
 import datetime
+import numpy as np
+import scipy
+import statistics
+from math import sqrt
 
+
+# function to add value labels
+def addlabels(x,y):
+    for i in range(len(x)):
+        plt.text(i,y[i],y[i])
 
 def graph_checkpoint_size(c):
     # Get data from database
@@ -15,11 +24,11 @@ def graph_checkpoint_size(c):
   container_data = {}
   for container in set([x[1] for x in data]):
       container_data[container] = []
-
+  
   # Populate dictionary
   for row in data:
       container_data[row[1]].append((row[0], row[2]))
-
+  
   # Calculate averages
   averages = {}
   for container, values in container_data.items():
@@ -27,87 +36,55 @@ def graph_checkpoint_size(c):
       avg_size = sum(sizes) / len(sizes)
       averages[container] = avg_size
 
-  pprint.pprint(container_data)
-  pprint.pprint(averages)
+  averages = {}
 
-  # Create figure
+  for key, value in container_data.items():
+    size_sum = 0
+    time_sum = 0
+    count = len(value)
+    for item in value:
+        size_sum += item[1]
+    averages[key] = (size_sum/count)
+
   fig = plt.figure()
 
-  # Plot data for each numContainers
-  for container in container_data:
-      x = [row[0] for row in container_data[container]]
-      y = [row[1] for row in container_data[container]]
+  names = list(averages.keys())
+  names.sort()
+  values = list(averages.values())
 
-      # Plot the sizes as a bar chart
-      plt.bar(x, y, color='b', align='center', width=0.2, label=f'{container} container')
+  # Sort the averages dictionary by keys
+  averages = dict(sorted(averages.items()))
 
-  # Plot the averages as a line chart
-  x = [int(container) for container in averages.keys()]
-  y = list(averages.values())
-  plt.plot(x, y, color='r', label='Average')
+  # Create a list of colors for each bar
+  colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
 
+  # Plot the bars
+  for i in names:
+    pprint.pprint(i)
+    plt.bar(i, values[i], color=colors[i%len(colors)], align='center', width=0.7, label=f'{i} container')
+    plot_confidence_interval(i, container_data[i])
+
+  # calling the function to add value labels
+  formatted_values = list(np.around(np.array(values),2))
+  addlabels(names, formatted_values)
+
+  default_x_ticks = range(len(names))
+  plt.xticks(default_x_ticks, names)
   plt.xlabel('Number of containers')
-  plt.ylabel('Checkpoint size (MB)')
+  plt.ylabel('Average checkpoint size (MB)')
   plt.title('Checkpoint sizes by number of containers')
-  plt.legend()
+
   fig.autofmt_xdate()
 
-  # Save graph image to "fig" folder
-  if not os.path.exists("fig"):
-      os.makedirs("fig")
-
-  filename = "checkpoint_sizes.png"
+  filename = "checkpoint_sizes_averages.png"
   timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
   new_filename = os.path.splitext(filename)[0] + "_" + timestamp + os.path.splitext(filename)[1]
 
-  fig.savefig(f"fig/{new_filename}")
-
-  return
-
-
-def graph_checkpoint_time(c):
-   # Get data from database
-  c.execute('SELECT timestamp, containers, elapsed FROM checkpoint_times')
-  data = c.fetchall()
-
-  # Create dictionary to store data by numContainers
-  container_data = {}
-  for container in set([x[1] for x in data]):
-      container_data[container] = []
-
-  # Populate dictionary
-  for row in data:
-      container_data[row[1]].append((row[0], row[2]))
-
-  pprint.pprint(container_data)
-
-  # Create figure
-  fig = plt.figure()
-
-  # Plot data for each numContainers
-  for container in container_data:
-      x = [row[0] for row in container_data[container]]
-      y = [row[1] for row in container_data[container]]
-
-      # Plot the sizes as a bar chart
-      plt.bar(x, y, color='b', align='center', width=0.2, label=f'{container} container')
-    
-  plt.xlabel('Number of containers')
-  plt.ylabel('Time elapsed (ms)')
-  plt.title('Checkpoint times by number of containers')
-  plt.legend()
-  fig.autofmt_xdate()
-
   # Save graph image to "fig" folder
-  if not os.path.exists("fig"):
-      os.makedirs("fig")
+  if not os.path.exists("fig/averages"):
+      os.makedirs("fig/averages")
 
-
-  filename = "checkpoint_times.png"
-  timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-  new_filename = os.path.splitext(filename)[0] + "_" + timestamp + os.path.splitext(filename)[1]
-
-  fig.savefig(f"fig/{new_filename}")
+  fig.savefig(f"fig/averages/{new_filename}")
 
   return
 
@@ -121,7 +98,7 @@ if __name__ == "__main__":
 
   graph_checkpoint_size(c)
 
-  graph_checkpoint_time(c)
+  # graph_checkpoint_time(c)
 
   # Close database connection
   conn.close()
