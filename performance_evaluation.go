@@ -57,36 +57,6 @@ func createContainers(ctx context.Context, numContainers int, clientset *kuberne
 	return pod
 }
 
-func saveSizeToDB(db *sql.DB, numContainers int64, size float64, checkpoint_type string) {
-	// Prepare SQL statement
-	stmt, err := db.Prepare("INSERT INTO checkpoint_sizes (containers, size, checkpoint_type) VALUES (?, ?, ?)")
-	if err != nil {
-		return
-	}
-	defer stmt.Close()
-
-	// Execute statement
-	_, err = stmt.Exec(numContainers, size, checkpoint_type)
-	if err != nil {
-		return
-	}
-}
-
-func saveTimeToDB(db *sql.DB, numContainers int64, elapsed time.Duration, checkpoint_type string) {
-	// Prepare SQL statement
-	stmt, err := db.Prepare("INSERT INTO checkpoint_times (containers, elapsed, checkpoint_type) VALUES (?, ?, ?)")
-	if err != nil {
-		return
-	}
-	defer stmt.Close()
-
-	// Execute statement
-	_, err = stmt.Exec(numContainers, elapsed.Milliseconds(), checkpoint_type)
-	if err != nil {
-		return
-	}
-}
-
 func getCheckpointSizePipelined(ctx context.Context, clientset *kubernetes.Clientset, numContainers int, db *sql.DB) {
 
 	pod := createContainers(ctx, numContainers, clientset)
@@ -161,7 +131,7 @@ func getCheckpointSizePipelined(ctx context.Context, clientset *kubernetes.Clien
 
 	sizeInMB := float64(size) / (1024 * 1024)
 	fmt.Printf("The size of %s is %.2f MB.\n", directory, sizeInMB)
-	saveSizeToDB(db, int64(numContainers), sizeInMB, "pipelined")
+	saveToDB(db, int64(numContainers), sizeInMB, "pipelined", "checkpoint_sizes")
 
 	// delete checkpoints folder
 	if _, err := exec.Command("sudo", "rm", "-f", directory+"/*").Output(); err != nil {
@@ -256,7 +226,7 @@ func getCheckpointSizeSequential(ctx context.Context, clientset *kubernetes.Clie
 
 	sizeInMB := float64(size) / (1024 * 1024)
 	fmt.Printf("The size of %s is %.2f MB.\n", directory, sizeInMB)
-	saveSizeToDB(db, int64(numContainers), sizeInMB, "sequential")
+	saveToDB(db, int64(numContainers), sizeInMB, "sequential", "checkpoint_sizes")
 
 	// delete checkpoints folder
 	if _, err := exec.Command("sudo", "rm", "-f", directory+"/*").Output(); err != nil {
@@ -339,7 +309,7 @@ func getCheckpointTimeSequential(ctx context.Context, clientset *kubernetes.Clie
 	elapsed := time.Since(start)
 	fmt.Println("Elapsed sequential: ", elapsed)
 
-	saveTimeToDB(db, int64(numContainers), elapsed, "sequential")
+	saveToDB(db, int64(numContainers), float64(elapsed.Milliseconds()), "sequential", "checkpoint_times")
 
 	// delete checkpoint folder
 	directory := "/tmp/checkpoints/checkpoints"
@@ -406,7 +376,7 @@ func getCheckpointTimePipelined(ctx context.Context, clientset *kubernetes.Clien
 	elapsed := time.Since(start)
 	fmt.Println("Elapsed pipelined: ", elapsed)
 
-	saveTimeToDB(db, int64(numContainers), elapsed, "pipelined")
+	saveToDB(db, int64(numContainers), float64(elapsed.Milliseconds()), "pipelined", "checkpoint_times")
 
 	// delete checkpoint folder
 	directory := "/tmp/checkpoints/checkpoints"
@@ -485,7 +455,7 @@ func getRestoreTime(ctx context.Context, clientset *kubernetes.Clientset, numCon
 	elapsed := time.Since(start)
 	fmt.Println("Elapsed sequential: ", elapsed)
 
-	saveRestoreTimeToDB(db, int64(numContainers), elapsed, "sequential")
+	saveToDB(db, int64(numContainers), float64(elapsed.Milliseconds()), "sequential", "restore_times")
 
 	// eliminate docker image
 	for i := 0; i < numContainers; i++ {
@@ -502,7 +472,7 @@ func getRestoreTime(ctx context.Context, clientset *kubernetes.Clientset, numCon
 	elapsed = time.Since(start)
 	fmt.Println("Elapsed pipelined: ", elapsed)
 
-	saveRestoreTimeToDB(db, int64(numContainers), elapsed, "pipelined")
+	saveToDB(db, int64(numContainers), float64(elapsed.Milliseconds()), "pipelined", "restore_times")
 
 	// eliminate docker image
 	for i := 0; i < numContainers; i++ {
@@ -519,7 +489,7 @@ func getRestoreTime(ctx context.Context, clientset *kubernetes.Clientset, numCon
 	elapsed = time.Since(start)
 	fmt.Println("Elapsed parallel: ", elapsed)
 
-	saveRestoreTimeToDB(db, int64(numContainers), elapsed, "parallelized")
+	saveToDB(db, int64(numContainers), float64(elapsed.Milliseconds()), "parallelized", "restore_times")
 
 	// eliminate docker image
 	for i := 0; i < numContainers; i++ {
@@ -527,21 +497,6 @@ func getRestoreTime(ctx context.Context, clientset *kubernetes.Clientset, numCon
 	}
 
 	cleanUp(ctx, clientset, pod)
-}
-
-func saveRestoreTimeToDB(db *sql.DB, numContainers int64, elapsed time.Duration, checkpoint_type string) {
-	// Prepare SQL statement
-	stmt, err := db.Prepare("INSERT INTO restore_times (containers, elapsed, checkpoint_type) VALUES (?, ?, ?)")
-	if err != nil {
-		return
-	}
-	defer stmt.Close()
-
-	// Execute statement
-	_, err = stmt.Exec(numContainers, elapsed.Milliseconds(), checkpoint_type)
-	if err != nil {
-		return
-	}
 }
 
 func buildahDeleteImage(imageName string) {
@@ -623,7 +578,7 @@ func getCheckpointImageRestoreSize(ctx context.Context, clientset *kubernetes.Cl
 		// Print the size in MB
 		sizeInMB := float64(image.Size/1000000) / (1024 * 1024)
 		fmt.Printf("The size of %s is %.2f MB.\n", directory, sizeInMB)
-		saveDockerSizeToDB(db, int64(numContainers), sizeInMB)
+		saveToDB(db, int64(numContainers), sizeInMB, "pipelined", "docker_sizes")
 	}
 
 	// delete checkpoints folder
@@ -643,21 +598,6 @@ func getCheckpointImageRestoreSize(ctx context.Context, clientset *kubernetes.Cl
 	}
 
 	cleanUp(ctx, clientset, pod)
-}
-
-func saveDockerSizeToDB(db *sql.DB, numContainers int64, size float64) {
-	// Prepare SQL statement
-	stmt, err := db.Prepare("INSERT INTO docker_sizes (containers, size, checkpoint_type) VALUES (?, ?, ?)")
-	if err != nil {
-		return
-	}
-	defer stmt.Close()
-
-	// Execute statement
-	_, err = stmt.Exec(numContainers, size)
-	if err != nil {
-		return
-	}
 }
 
 func getTimeDirectVsTriangularized(ctx context.Context, clientset *kubernetes.Clientset, numContainers int, db *sql.DB, exchange string) {
@@ -763,12 +703,12 @@ func getTimeDirectVsTriangularized(ctx context.Context, clientset *kubernetes.Cl
 	elapsed := time.Since(start)
 	fmt.Printf("Time to checkpoint and restore %d containers: %s\n", numContainers, elapsed)
 
-	saveTotalTimeDB(db, int64(numContainers), elapsed.Seconds(), exchange)
+	saveToDB(db, int64(numContainers), elapsed.Seconds(), exchange, "total_times")
 }
 
-func saveTotalTimeDB(db *sql.DB, numContainers int64, size float64, checkpointType string) {
+func saveToDB(db *sql.DB, numContainers int64, size float64, checkpointType string, db_name string) {
 	// Prepare SQL statement
-	stmt, err := db.Prepare("INSERT INTO total_times (containers, size, checkpoint_type) VALUES (?, ?, ?)")
+	stmt, err := db.Prepare("INSERT INTO " + db_name + " (containers, size, checkpoint_type) VALUES (?, ?, ?)")
 	if err != nil {
 		return
 	}
@@ -847,9 +787,9 @@ func main() {
 		return
 	}
 
-	containerCounts := []int{1, 2, 5, 10}
+	containerCounts := []int{1}
 	// 	containerCounts := []int{1, 2, 3, 5, 10}
-	repetitions := 20
+	repetitions := 2
 	//  repetitions := 20
 
 	for i := 0; i < repetitions; i++ {
@@ -926,5 +866,4 @@ func main() {
 
 	// Print the output of the Python program
 	fmt.Println(string(output))
-
 }
