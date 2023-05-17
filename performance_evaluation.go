@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 	migrationoperator "github.com/leonardopoggiani/live-migration-operator/controllers"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/docker/docker/client"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -24,6 +24,9 @@ import (
 )
 
 func createContainers(ctx context.Context, numContainers int, clientset *kubernetes.Clientset) *v1.Pod {
+	// Generate a random string
+	rand.Seed(time.Now().UnixNano())
+	randStr := fmt.Sprintf("%d", rand.Intn(4000)+1000)
 
 	createContainers := []v1.Container{}
 	// Add the specified number of containers to the Pod manifest
@@ -37,10 +40,10 @@ func createContainers(ctx context.Context, numContainers int, clientset *kuberne
 		createContainers = append(createContainers, container)
 	}
 
-	// Create the Pod
+	// Create the Pod with the random string appended to the name
 	pod, err := clientset.CoreV1().Pods("default").Create(ctx, &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("test-pod-%d-containers", numContainers),
+			Name: fmt.Sprintf("test-pod-%d-containers-%s", numContainers, randStr),
 			Labels: map[string]string{
 				"app": "test",
 			},
@@ -63,7 +66,7 @@ func getCheckpointSizePipelined(ctx context.Context, clientset *kubernetes.Clien
 
 	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 
-	err := LiveMigrationReconciler.WaitForContainerReady(fmt.Sprintf("test-pod-%d-containers", numContainers), "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
+	err := LiveMigrationReconciler.WaitForContainerReady(pod.Name, "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
 	if err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
@@ -134,7 +137,13 @@ func getCheckpointSizePipelined(ctx context.Context, clientset *kubernetes.Clien
 	saveToDB(db, int64(numContainers), sizeInMB, "pipelined", "checkpoint_sizes")
 
 	// delete checkpoints folder
-	if _, err := exec.Command("sudo", "rm", "-f", directory+"/*").Output(); err != nil {
+	if _, err := exec.Command("sudo", "rm", "-f", directory+"/").Output(); err != nil {
+		cleanUp(ctx, clientset, pod)
+		fmt.Println(err.Error())
+		return
+	}
+
+	if _, err = exec.Command("sudo", "mkdir", "/tmp/checkpoints/checkpoints/").Output(); err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
@@ -158,7 +167,7 @@ func getCheckpointSizeSequential(ctx context.Context, clientset *kubernetes.Clie
 
 	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 
-	err := LiveMigrationReconciler.WaitForContainerReady(fmt.Sprintf("test-pod-%d-containers", numContainers), "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
+	err := LiveMigrationReconciler.WaitForContainerReady(pod.Name, "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
 	if err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
@@ -229,7 +238,13 @@ func getCheckpointSizeSequential(ctx context.Context, clientset *kubernetes.Clie
 	saveToDB(db, int64(numContainers), sizeInMB, "sequential", "checkpoint_sizes")
 
 	// delete checkpoints folder
-	if _, err := exec.Command("sudo", "rm", "-f", directory+"/*").Output(); err != nil {
+	if _, err := exec.Command("sudo", "rm", "-f", directory+"/").Output(); err != nil {
+		cleanUp(ctx, clientset, pod)
+		fmt.Println(err.Error())
+		return
+	}
+
+	if _, err = exec.Command("sudo", "mkdir", "/tmp/checkpoints/checkpoints/").Output(); err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
@@ -248,9 +263,11 @@ func getCheckpointSizeSequential(ctx context.Context, clientset *kubernetes.Clie
 }
 
 func cleanUp(ctx context.Context, clientset *kubernetes.Clientset, pod *v1.Pod) {
+	fmt.Println("Garbage collecting => " + pod.Name)
 	err := clientset.CoreV1().Pods("default").Delete(ctx, pod.Name, metav1.DeleteOptions{})
 	if err != nil {
-		panic(err.Error())
+		fmt.Println(err.Error())
+		return
 	}
 }
 
@@ -260,7 +277,7 @@ func getCheckpointTimeSequential(ctx context.Context, clientset *kubernetes.Clie
 
 	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 
-	err := LiveMigrationReconciler.WaitForContainerReady(fmt.Sprintf("test-pod-%d-containers", numContainers), "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
+	err := LiveMigrationReconciler.WaitForContainerReady(pod.Name, "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
 	if err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
@@ -313,7 +330,13 @@ func getCheckpointTimeSequential(ctx context.Context, clientset *kubernetes.Clie
 
 	// delete checkpoint folder
 	directory := "/tmp/checkpoints/checkpoints"
-	if _, err := exec.Command("sudo", "rm", "-rf", directory+"/*").Output(); err != nil {
+	if _, err := exec.Command("sudo", "rm", "-rf", directory+"/").Output(); err != nil {
+		cleanUp(ctx, clientset, pod)
+		fmt.Println(err.Error())
+		return
+	}
+
+	if _, err = exec.Command("sudo", "mkdir", "/tmp/checkpoints/checkpoints/").Output(); err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
@@ -322,13 +345,36 @@ func getCheckpointTimeSequential(ctx context.Context, clientset *kubernetes.Clie
 	cleanUp(ctx, clientset, pod)
 }
 
+func countFilesInFolder(folderPath string) (int, error) {
+	fileCount := 0
+
+	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			fmt.Println(err.Error())
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			fmt.Println("Not a regular file")
+			return nil
+		}
+		fileCount += 1
+		return nil
+	})
+	if err != nil {
+		fmt.Println(err.Error())
+		return 0, err
+	}
+
+	return fileCount, nil
+}
+
 func getCheckpointTimePipelined(ctx context.Context, clientset *kubernetes.Clientset, numContainers int, db *sql.DB) {
 
 	pod := createContainers(ctx, numContainers, clientset)
 
 	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 
-	err := LiveMigrationReconciler.WaitForContainerReady(fmt.Sprintf("test-pod-%d-containers", numContainers), "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
+	err := LiveMigrationReconciler.WaitForContainerReady(pod.Name, "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
 	if err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
@@ -380,7 +426,13 @@ func getCheckpointTimePipelined(ctx context.Context, clientset *kubernetes.Clien
 
 	// delete checkpoint folder
 	directory := "/tmp/checkpoints/checkpoints"
-	if _, err := exec.Command("sudo", "rm", "-rf", directory+"/*").Output(); err != nil {
+	if _, err := exec.Command("sudo", "rm", "-rf", directory+"/").Output(); err != nil {
+		cleanUp(ctx, clientset, pod)
+		fmt.Println(err.Error())
+		return
+	}
+
+	if _, err = exec.Command("sudo", "mkdir", "/tmp/checkpoints/checkpoints/").Output(); err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
@@ -396,14 +448,12 @@ func getRestoreTime(ctx context.Context, clientset *kubernetes.Clientset, numCon
 
 	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 
-	err := LiveMigrationReconciler.WaitForContainerReady(fmt.Sprintf("test-pod-%d-containers", numContainers), "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
+	err := LiveMigrationReconciler.WaitForContainerReady(pod.Name, "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
 	if err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
 	}
-
-	fmt.Printf("Pod %s is ready\n", pod.Name)
 
 	// Create a slice of Container structs
 	var containers []migrationoperator.Container
@@ -438,17 +488,27 @@ func getRestoreTime(ctx context.Context, clientset *kubernetes.Clientset, numCon
 		return
 	}
 
+	path := "/tmp/checkpoints/checkpoints/"
 	// create dummy file
-	_, err = os.Create("/tmp/checkpoints/checkpoints/dummy")
+	_, err = os.Create(path + "dummy")
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
 
+	files, err := countFilesInFolder(path)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	fmt.Printf("Files count => %d", files)
+
 	start := time.Now()
 
-	_, err = LiveMigrationReconciler.BuildahRestore(ctx, "/tmp/checkpoints/checkpoints")
+	pod, err = LiveMigrationReconciler.BuildahRestore(ctx, "/tmp/checkpoints/checkpoints", clientset)
 	if err != nil {
+		fmt.Println(err.Error())
 		return
 	}
 	// Calculate the time taken for the restore
@@ -462,10 +522,12 @@ func getRestoreTime(ctx context.Context, clientset *kubernetes.Clientset, numCon
 		buildahDeleteImage("localhost/leonardopoggiani/checkpoint-images:container-" + strconv.Itoa(i))
 	}
 
+	cleanUp(ctx, clientset, pod)
 	start = time.Now()
 
-	_, err = LiveMigrationReconciler.BuildahRestorePipelined(ctx, "/tmp/checkpoints/checkpoints")
+	pod, err = LiveMigrationReconciler.BuildahRestorePipelined(ctx, "/tmp/checkpoints/checkpoints", clientset)
 	if err != nil {
+		fmt.Println(err.Error())
 		return
 	}
 	// Calculate the time taken for the restore
@@ -479,12 +541,16 @@ func getRestoreTime(ctx context.Context, clientset *kubernetes.Clientset, numCon
 		buildahDeleteImage("localhost/leonardopoggiani/checkpoint-images:container-" + strconv.Itoa(i))
 	}
 
+	cleanUp(ctx, clientset, pod)
+
 	start = time.Now()
 
-	_, err = LiveMigrationReconciler.BuildahRestoreParallelized(ctx, "/tmp/checkpoints/checkpoints")
+	pod, err = LiveMigrationReconciler.BuildahRestoreParallelized(ctx, "/tmp/checkpoints/checkpoints", clientset)
 	if err != nil {
+		fmt.Println(err.Error())
 		return
 	}
+
 	// Calculate the time taken for the restore
 	elapsed = time.Since(start)
 	fmt.Println("Elapsed parallel: ", elapsed)
@@ -509,12 +575,34 @@ func buildahDeleteImage(imageName string) {
 	fmt.Println("Image", imageName, "removed successfully.")
 }
 
+func getImageSize(imageName string) (float64, error) {
+	// Build the command to get the image size
+	cmd := exec.Command("sudo", "buildah", "inspect", "-f", "{{.Size}}", imageName)
+
+	// Run the command and capture the output
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+
+	// Parse the output as a float64
+	sizeInBytes, err := strconv.ParseFloat(strings.TrimSpace(string(output)), 64)
+	if err != nil {
+		return 0, err
+	}
+
+	// Convert the size to MB
+	sizeInMB := sizeInBytes / (1024 * 1024)
+
+	return sizeInMB, nil
+}
+
 func getCheckpointImageRestoreSize(ctx context.Context, clientset *kubernetes.Clientset, numContainers int, db *sql.DB) {
 	pod := createContainers(ctx, numContainers, clientset)
 
 	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 
-	err := LiveMigrationReconciler.WaitForContainerReady(fmt.Sprintf("test-pod-%d-containers", numContainers), "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
+	err := LiveMigrationReconciler.WaitForContainerReady(pod.Name, "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
 	if err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
@@ -560,29 +648,21 @@ func getCheckpointImageRestoreSize(ctx context.Context, clientset *kubernetes.Cl
 
 	directory := "/tmp/checkpoints/checkpoints"
 
-	// Create a new Docker client
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// eliminate docker image
 	for i := 0; i < numContainers; i++ {
-		// Get the image details
+		// Get the image name
 		imageName := "localhost/leonardopoggiani/checkpoint-images:container-" + strconv.Itoa(i)
-		image, _, err := cli.ImageInspectWithRaw(context.Background(), imageName)
+
+		// Get the image size
+		sizeInMB, err := getImageSize(imageName)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		// Print the size in MB
-		sizeInMB := float64(image.Size/1000000) / (1024 * 1024)
-		fmt.Printf("The size of %s is %.2f MB.\n", directory, sizeInMB)
-		saveToDB(db, int64(numContainers), sizeInMB, "pipelined", "docker_sizes")
+		fmt.Printf("The size of %s is %.2f MB.\n", imageName, sizeInMB)
 	}
 
 	// delete checkpoints folder
-	if _, err := exec.Command("sudo", "rm", "-f", directory+"/*").Output(); err != nil {
+	if _, err := exec.Command("sudo", "rm", "-f", directory+"/").Output(); err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
@@ -605,14 +685,12 @@ func getTimeDirectVsTriangularized(ctx context.Context, clientset *kubernetes.Cl
 
 	LiveMigrationReconciler := migrationoperator.LiveMigrationReconciler{}
 
-	err := LiveMigrationReconciler.WaitForContainerReady(fmt.Sprintf("test-pod-%d-containers", numContainers), "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
+	err := LiveMigrationReconciler.WaitForContainerReady(pod.Name, "default", fmt.Sprintf("container-%d", numContainers-1), clientset)
 	if err != nil {
 		cleanUp(ctx, clientset, pod)
 		fmt.Println(err.Error())
 		return
 	}
-
-	fmt.Printf("Pod %s is ready\n", pod.Name)
 
 	// Create a slice of Container structs
 	var containers []migrationoperator.Container
@@ -653,7 +731,12 @@ func getTimeDirectVsTriangularized(ctx context.Context, clientset *kubernetes.Cl
 
 	cleanUp(ctx, clientset, pod)
 
-	LiveMigrationReconciler.BuildahRestore(ctx, "/tmp/checkpoints/checkpoints")
+	pod, err = LiveMigrationReconciler.BuildahRestore(ctx, "/tmp/checkpoints/checkpoints", clientset)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
 	LiveMigrationReconciler.PushDockerImage("localhost/leonardopoggiani/checkpoint-images:container-"+strconv.Itoa(numContainers-1), "container-"+strconv.Itoa(numContainers-1), pod.Name)
 
 	createContainers := []v1.Container{}
@@ -719,6 +802,25 @@ func saveToDB(db *sql.DB, numContainers int64, size float64, checkpointType stri
 	if err != nil {
 		return
 	}
+}
+
+func deletePodsStartingWithTest(ctx context.Context, clientset *kubernetes.Clientset) error {
+	podList, err := clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	for _, pod := range podList.Items {
+		if pod.ObjectMeta.Name[:5] == "test-" {
+			err := clientset.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Deleted pod %s\n", pod.Name)
+		}
+	}
+
+	return nil
 }
 
 func main() {
@@ -792,6 +894,7 @@ func main() {
 	repetitions := 2
 	//  repetitions := 20
 
+	fmt.Printf("############### SIZE ###############\n")
 	for i := 0; i < repetitions; i++ {
 		fmt.Printf("Repetition %d\n", i)
 
@@ -800,13 +903,21 @@ func main() {
 			getCheckpointSizePipelined(ctx, clientset, numContainers, db)
 		}
 
+		deletePodsStartingWithTest(ctx, clientset)
+
+		fmt.Printf("############### CHECKPOINT TIME ###############\n")
+
 		for _, numContainers := range containerCounts {
 			fmt.Printf("Time for %d containers\n", numContainers)
 			getCheckpointTimePipelined(ctx, clientset, numContainers, db)
 		}
+
+		deletePodsStartingWithTest(ctx, clientset)
+
 	}
 
 	for i := 0; i < repetitions; i++ {
+		fmt.Printf("############### SIZE ###############\n")
 		fmt.Printf("Repetition %d\n", i)
 
 		for _, numContainers := range containerCounts {
@@ -814,29 +925,47 @@ func main() {
 			getCheckpointSizeSequential(ctx, clientset, numContainers, db)
 		}
 
+		deletePodsStartingWithTest(ctx, clientset)
+
+		fmt.Printf("############### CHECKPOINT TIME ###############\n")
+
 		for _, numContainers := range containerCounts {
 			fmt.Printf("Time for %d containers\n", numContainers)
 			getCheckpointTimeSequential(ctx, clientset, numContainers, db)
 		}
+
+		deletePodsStartingWithTest(ctx, clientset)
+
 	}
+
+	fmt.Printf("############### RESTORE TIME ###############\n")
 
 	for i := 0; i < repetitions; i++ {
 		fmt.Printf("Repetition %d\n", i)
 
 		for _, numContainers := range containerCounts {
-			fmt.Printf("Size for %d containers\n", numContainers)
+			fmt.Printf("Restore time for %d containers\n", numContainers)
 			getRestoreTime(ctx, clientset, numContainers, db)
 		}
+
+		deletePodsStartingWithTest(ctx, clientset)
 	}
+
+	fmt.Printf("############### DOCKER IMAGE SIZE ###############\n")
 
 	for i := 0; i < repetitions; i++ {
 		fmt.Printf("Repetition %d\n", i)
 
 		for _, numContainers := range containerCounts {
-			fmt.Printf("Size for %d containers\n", numContainers)
+			fmt.Printf("Docker image size for %d containers\n", numContainers)
 			getCheckpointImageRestoreSize(ctx, clientset, numContainers, db)
 		}
+
+		deletePodsStartingWithTest(ctx, clientset)
+
 	}
+
+	fmt.Printf("############### TOTAL TIME ###############\n")
 
 	for i := 0; i < repetitions; i++ {
 		fmt.Printf("Repetition %d\n", i)
@@ -844,15 +973,25 @@ func main() {
 			fmt.Printf("Total times for %d containers\n", numContainers)
 			getTimeDirectVsTriangularized(ctx, clientset, numContainers, db, "triangularized")
 		}
+
+		deletePodsStartingWithTest(ctx, clientset)
+
 	}
+
+	fmt.Printf("############### DIFFERENCE TIME ###############\n")
 
 	for i := 0; i < repetitions; i++ {
 		fmt.Printf("Repetition %d\n", i)
 		for _, numContainers := range containerCounts {
-			fmt.Printf("Total times for %d containers\n", numContainers)
+			fmt.Printf("Difference times for %d containers\n", numContainers)
 			getTimeDirectVsTriangularized(ctx, clientset, numContainers, db, "direct")
 		}
+
+		deletePodsStartingWithTest(ctx, clientset)
+
 	}
+
+	deletePodsStartingWithTest(ctx, clientset)
 
 	// Command to call the Python program
 	cmd := exec.Command("python", "graphs.py")
