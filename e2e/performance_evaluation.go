@@ -1,4 +1,4 @@
-package main
+package e2e
 
 import (
 	"context"
@@ -823,7 +823,7 @@ func deletePodsStartingWithTest(ctx context.Context, clientset *kubernetes.Clien
 	return nil
 }
 
-func main() {
+func performance_evaluation() {
 	// Use a context to cancel the loop that checks for sourcePod
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
