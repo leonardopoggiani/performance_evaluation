@@ -23,7 +23,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func createContainers(ctx context.Context, numContainers int, clientset *kubernetes.Clientset) *v1.Pod {
+func CreateContainers(ctx context.Context, numContainers int, clientset *kubernetes.Clientset) *v1.Pod {
 	// Generate a random string
 	rand.Seed(time.Now().UnixNano())
 	randStr := fmt.Sprintf("%d", rand.Intn(4000)+1000)
