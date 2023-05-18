@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -38,7 +39,7 @@ func waitForPodCreation(clientset *kubernetes.Clientset, ctx context.Context) {
 			// Check the event type
 			if event.Type == "ADDED" {
 				// Pod created
-				pod, ok := event.Object.(*metav1.Pod)
+				pod, ok := event.Object.(*v1.Pod)
 				if !ok {
 					log.Println("Unexpected object type received")
 					continue
@@ -92,7 +93,7 @@ func main() {
 	waitForPodCreation(clientset, ctx)
 
 	// once created the dummy pod and correctly offloaded, i can create a pod to migrate
-	migration_operator := migrationoperator.LiveMigrationOperator{}
+	migration_operator := migrationoperator.LiveMigrationReconciler{}
 
 	repetitions := 1
 	numContainers := 1
