@@ -11,6 +11,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"k8s.io/client-go/kubernetes"
+
+	migrationoperator "github.com/leonardopoggiani/live-migration-operator/controllers"
 )
 
 func waitForPodCreation(clientset *kubernetes.Clientset, ctx context.Context) {
@@ -36,7 +38,7 @@ func waitForPodCreation(clientset *kubernetes.Clientset, ctx context.Context) {
 			// Check the event type
 			if event.Type == "ADDED" {
 				// Pod created
-				pod, ok := event.Object.(*corev1.Pod)
+				pod, ok := event.Object.(*metav1.Pod)
 				if !ok {
 					log.Println("Unexpected object type received")
 					continue
@@ -88,4 +90,20 @@ func main() {
 	ctx := context.Background()
 
 	waitForPodCreation(clientset, ctx)
+
+	// once created the dummy pod and correctly offloaded, i can create a pod to migrate
+	migration_operator := migrationoperator.LiveMigrationOperator{}
+
+	repetitions := 1
+	numContainers := 1
+
+	for j := 0; j <= repetitions; j++ {
+		fmt.Printf("Repetitions %d", j)
+		for i := 0; i <= numContainers; i++ {
+			fmt.Printf("Containers %d", i)
+			migration_operator.CreateContainers(ctx, i, clientset)
+		}
+	}
+
+	// migration_operator.MigratePod()
 }
