@@ -3,58 +3,48 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
-	"time"
 
 	v1 "k8s.io/api/core/v1"
+	_ "github.com/mattn/go-sqlite3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"k8s.io/client-go/kubernetes"
-
 	migrationoperator "github.com/leonardopoggiani/live-migration-operator/controllers"
+
+	performance "github.com/leonardopoggiani/performance-evaluation/e2e"
 )
 
-func waitForPodCreation(clientset *kubernetes.Clientset, ctx context.Context) {
-	// Set up a watch for pod creation events
-	watch, err := clientset.CoreV1().Pods("default").Watch(ctx, metav1.ListOptions{
-		FieldSelector: "metadata.name=dummy-pod",
-	})
+func waitForServiceCreation(clientset *kubernetes.Clientset, ctx context.Context) {
+	watcher, err := clientset.CoreV1().Services("liqo-demo").Watch(ctx, metav1.ListOptions{})
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println("Error watching services")
+		return
 	}
-
-	// Create a channel to receive watch events
-	eventChan := watch.ResultChan()
+	defer watcher.Stop()
 
 	for {
 		select {
-		case event, ok := <-eventChan:
+		case event, ok := <-watcher.ResultChan():
 			if !ok {
-				// Watch channel closed
+				fmt.Println("Watcher channel closed")
 				return
 			}
-
-			// Check the event type
-			if event.Type == "ADDED" {
-				// Pod created
-				pod, ok := event.Object.(*v1.Pod)
+			if event.Type == watch.Added {
+				service, ok := event.Object.(*corev1.Service)
 				if !ok {
-					log.Println("Unexpected object type received")
-					continue
+					fmt.Println("Error casting service object")
+					return
 				}
-
-				// Check if it's the desired pod
-				if pod.Name == "dummy-pod" {
-					fmt.Println("Dummy Pod created!")
+				if service.Name == "dummy-service" {
+					fmt.Println("Service dummy-service created")
 					return
 				}
 			}
-
-		case <-time.After(1 * time.Minute):
-			// Timeout after 1 minute
-			fmt.Println("Timeout: Dummy Pod creation not detected")
+		case <-ctx.Done():
+			fmt.Println("Context done")
 			return
 		}
 	}
@@ -90,10 +80,9 @@ func main() {
 
 	ctx := context.Background()
 
-	waitForPodCreation(clientset, ctx)
+	waitForServiceCreation(clientset, ctx)
 
 	// once created the dummy pod and correctly offloaded, i can create a pod to migrate
-	migration_operator := migrationoperator.LiveMigrationReconciler{}
 
 	repetitions := 1
 	numContainers := 1
@@ -102,7 +91,7 @@ func main() {
 		fmt.Printf("Repetitions %d", j)
 		for i := 0; i <= numContainers; i++ {
 			fmt.Printf("Containers %d", i)
-			migration_operator.CreateContainers(ctx, i, clientset)
+			performance.CreateContainers(ctx, i, clientset)
 		}
 	}
 
