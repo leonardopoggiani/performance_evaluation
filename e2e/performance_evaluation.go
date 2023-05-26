@@ -4,60 +4,20 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
 	"database/sql"
 
 	migrationoperator "github.com/leonardopoggiani/live-migration-operator/controllers"
 	_ "github.com/mattn/go-sqlite3"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
-
-func CreateContainers(ctx context.Context, numContainers int, clientset *kubernetes.Clientset) *v1.Pod {
-	// Generate a random string
-	rand.Seed(time.Now().UnixNano())
-	randStr := fmt.Sprintf("%d", rand.Intn(4000)+1000)
-
-	createContainers := []v1.Container{}
-	// Add the specified number of containers to the Pod manifest
-	for i := 0; i < numContainers; i++ {
-		container := v1.Container{
-			Name:            fmt.Sprintf("container-%d", i),
-			Image:           "docker.io/library/nginx:latest",
-			ImagePullPolicy: v1.PullPolicy("IfNotPresent"),
-		}
-
-		createContainers = append(createContainers, container)
-	}
-
-	// Create the Pod with the random string appended to the name
-	pod, err := clientset.CoreV1().Pods("default").Create(ctx, &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("test-pod-%d-containers-%s", numContainers, randStr),
-			Labels: map[string]string{
-				"app": "test",
-			},
-		},
-		Spec: v1.PodSpec{
-			Containers: createContainers,
-		},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		fmt.Println(err.Error())
-		return nil
-	}
-
-	return pod
-}
 
 func getCheckpointSizePipelined(ctx context.Context, clientset *kubernetes.Clientset, numContainers int, db *sql.DB) {
 
