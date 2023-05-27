@@ -82,7 +82,7 @@ func waitForFileCreation() error {
 	select {
 	case <-done:
 		return nil
-	case <-time.After(60 * time.Second): // Timeout after 60 seconds
+	case <-time.After(180 * time.Second): // Timeout after 60 seconds
 		return fmt.Errorf("Timeout: File 'dummy' not created within the specified time")
 	}
 }
