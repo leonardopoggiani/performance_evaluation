@@ -159,6 +159,8 @@ func main() {
 
 	ctx := context.Background()
 
+	fmt.Println("Kubeconfig file not found")
+
 	deletePodsStartingWithTest(ctx, clientset)
 	waitForServiceCreation(clientset, ctx)
 
